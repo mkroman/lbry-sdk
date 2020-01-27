@@ -26,7 +26,7 @@ class TestComponentManager(AsyncioTestCase):
             [
                 components.HashAnnouncerComponent,
                 components.PeerProtocolServerComponent,
-                components.StreamManagerComponent,
+                components.FileManagerComponent,
             ]
         ]
         self.component_manager = ComponentManager(Config())
