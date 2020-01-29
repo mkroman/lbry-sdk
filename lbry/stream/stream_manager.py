@@ -23,10 +23,10 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def path_or_none(p) -> Optional[str]:
-    if not p:
+def path_or_none(encoded_path) -> Optional[str]:
+    if not encoded_path:
         return
-    return binascii.unhexlify(p).decode()
+    return binascii.unhexlify(encoded_path).decode()
 
 
 class StreamManager(SourceManager):
@@ -216,10 +216,10 @@ class StreamManager(SourceManager):
             self._upload_stream_to_reflector(source)
         return source
 
-    async def _delete(self, stream: ManagedStream, delete_file: Optional[bool] = False):
-        blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
+    async def _delete(self, source: ManagedStream, delete_file: Optional[bool] = False):
+        blob_hashes = [source.sd_hash] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        await self.storage.delete_stream(stream.descriptor)
+        await self.storage.delete_stream(source.descriptor)
 
     async def stream_partial_content(self, request: Request, sd_hash: str):
         return await self._sources[sd_hash].stream_file(request, self.node)
