@@ -53,6 +53,10 @@ class StreamManager(SourceManager):
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
         self.running_reflector_uploads: typing.List[asyncio.Task] = []
 
+    @property
+    def streams(self):
+        return self._sources
+
     def add(self, source: ManagedStream):
         super().add(source)
         self.storage.content_claim_callbacks[source.stream_hash] = lambda: self._update_content_claim(source)
