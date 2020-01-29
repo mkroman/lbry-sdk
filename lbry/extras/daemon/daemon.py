@@ -1897,7 +1897,7 @@ class Daemon(metaclass=JSONRPCServerType):
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
         paginated = paginate_list(
-            self.file_manager.get_filtered_streams(sort, reverse, comparison, **kwargs), page, page_size
+            self.file_manager.get_filtered(sort, reverse, comparison, **kwargs), page, page_size
         )
         if paginated['items']:
             receipts = {
@@ -1935,12 +1935,12 @@ class Daemon(metaclass=JSONRPCServerType):
         if status not in ['start', 'stop']:
             raise Exception('Status must be "start" or "stop".')
 
-        streams = self.file_manager.get_filtered_streams(**kwargs)
+        streams = self.file_manager.get_filtered(**kwargs)
         if not streams:
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
-            await stream.save_file(node=self.file_manager.node)
+            await stream.save_file()
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
             await stream.stop()
@@ -1984,7 +1984,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) true if deletion was successful
         """
 
-        streams = self.file_manager.get_filtered_streams(**kwargs)
+        streams = self.file_manager.get_filtered(**kwargs)
 
         if len(streams) > 1:
             if not delete_all:
@@ -2001,7 +2001,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             for stream in streams:
                 message = f"Deleted file {stream.file_name}"
-                await self.file_manager.delete_stream(stream, delete_file=delete_from_download_dir)
+                await self.file_manager.delete(stream, delete_file=delete_from_download_dir)
                 log.info(message)
             result = True
         return result
@@ -2033,7 +2033,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {File}
         """
 
-        streams = self.file_manager.get_filtered_streams(**kwargs)
+        streams = self.file_manager.get_filtered(**kwargs)
 
         if len(streams) > 1:
             log.warning("There are %i matching files, use narrower filters to select one", len(streams))
@@ -3314,8 +3314,8 @@ class Daemon(metaclass=JSONRPCServerType):
             old_stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
             if file_path is not None:
                 if old_stream_hash:
-                    stream_to_delete = self.file_manager.get_stream_by_stream_hash(old_stream_hash)
-                    await self.file_manager.delete_stream(stream_to_delete, delete_file=False)
+                    stream_to_delete = self.file_manager.get_filtered(stream_hash=old_stream_hash)[0]
+                    await self.file_manager.delete(stream_to_delete, delete_file=False)
                 file_stream = await self.file_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
@@ -4163,9 +4163,9 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         if not blob_hash or not is_valid_blobhash(blob_hash):
             return f"Invalid blob hash to delete '{blob_hash}'"
-        streams = self.file_manager.get_filtered_streams(sd_hash=blob_hash)
+        streams = self.file_manager.get_filtered(sd_hash=blob_hash)
         if streams:
-            await self.file_manager.delete_stream(streams[0])
+            await self.file_manager.delete(streams[0])
         else:
             await self.blob_manager.delete_blobs([blob_hash])
         return "Deleted %s" % blob_hash
@@ -4368,7 +4368,7 @@ class Daemon(metaclass=JSONRPCServerType):
             server, port = random.choice(self.conf.reflector_servers)
         reflected = await asyncio.gather(*[
             stream.upload_to_reflector(server, port)
-            for stream in self.file_manager.get_filtered_streams(**kwargs)
+            for stream in self.file_manager.get_filtered(**kwargs)
         ])
         total = []
         for reflected_for_stream in reflected:
@@ -4833,10 +4833,10 @@ class Daemon(metaclass=JSONRPCServerType):
         results = await self.ledger.resolve(accounts, urls)
         if results:
             try:
-                claims = self.file_manager._convert_to_old_resolve_output(self.wallet_manager, results)
-                await self.storage.save_claims_for_resolve([
-                    value for value in claims.values() if 'error' not in value
-                ])
+                await self.storage.save_claim_from_output(
+                    self.ledger,
+                    *(result for result in results.values() if isinstance(result, Output))
+                )
             except DecodeError:
                 pass
         return results
